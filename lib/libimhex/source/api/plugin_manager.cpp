@@ -30,7 +30,11 @@ namespace hex {
 
             return handle;
         #else
-            auto handle = uintptr_t(dlopen(wolv::util::toUTF8String(path).c_str(), RTLD_LAZY));
+            const auto pathString = wolv::util::toUTF8String(path);
+
+            auto handle = uintptr_t(dlopen(pathString.c_str(), RTLD_NOLOAD));
+            if (handle == 0)
+                handle = uintptr_t(dlopen(pathString.c_str(), RTLD_NOW | RTLD_GLOBAL));
 
             if (handle == 0) {
                 log::error("Loading library '{}' failed: {}!", wolv::util::toUTF8String(path.filename()), dlerror());
@@ -112,10 +116,6 @@ namespace hex {
     }
 
     Plugin::~Plugin() {
-        if (isLoaded()) {
-            log::info("Trying to unload plugin '{}'", getPluginName());
-        }
-
         unloadLibrary(m_handle, m_path);
     }
 
@@ -133,7 +133,7 @@ namespace hex {
 
 
         const auto requestedVersion = getCompatibleVersion();
-        const auto imhexVersion = ImHexApi::System::getImHexVersion();
+        const auto imhexVersion = ImHexApi::System::getImHexVersion().get();
         if (!imhexVersion.starts_with(requestedVersion)) {
             if (requestedVersion.empty()) {
                 log::warn("Plugin '{}' did not specify a compatible version, assuming it is compatible with the current version of ImHex.", wolv::util::toUTF8String(m_path.filename()));
@@ -335,7 +335,7 @@ namespace hex {
     void PluginManager::initializeNewPlugins() {
         for (const auto &plugin : getPlugins()) {
             if (!plugin.isLoaded())
-                hex::unused(plugin.initializePlugin());
+                std::ignore = plugin.initializePlugin();
         }
     }
 

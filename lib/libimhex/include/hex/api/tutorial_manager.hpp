@@ -10,7 +10,7 @@
 
 #include <hex/ui/imgui_imhex_extensions.h>
 
-namespace hex {
+EXPORT_MODULE namespace hex {
 
     class TutorialManager {
     public:
@@ -150,6 +150,9 @@ namespace hex {
         static void startHelpHover();
         static void addInteractiveHelpText(std::initializer_list<std::variant<Lang, std::string, int>> &&ids, UnlocalizedString unlocalizedString);
         static void addInteractiveHelpLink(std::initializer_list<std::variant<Lang, std::string, int>> &&ids, std::string link);
+
+        static void setLastItemInteractiveHelpPopup(std::function<void()> callback);
+        static void setLastItemInteractiveHelpLink(std::string link);
 
 
         /**

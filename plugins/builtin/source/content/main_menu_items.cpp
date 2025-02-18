@@ -8,6 +8,7 @@
 #include <hex/api/project_file_manager.hpp>
 #include <hex/api/layout_manager.hpp>
 #include <hex/api/achievement_manager.hpp>
+#include <hex/api/events/requests_gui.hpp>
 #include <hex/api/tutorial_manager.hpp>
 
 #include <hex/helpers/crypto.hpp>
@@ -18,11 +19,15 @@
 #include <toasts/toast_notification.hpp>
 #include <popups/popup_text_input.hpp>
 #include <hex/api/workspace_manager.hpp>
+#include <hex/api/events/events_interaction.hpp>
 
 #include <wolv/io/file.hpp>
 #include <wolv/literals.hpp>
 
 #include <romfs/romfs.hpp>
+#include <hex/helpers/menu_items.hpp>
+
+#include <GLFW/glfw3.h>
 
 using namespace std::literals::string_literals;
 using namespace wolv::literals;
@@ -76,7 +81,7 @@ namespace hex::plugin::builtin {
 
         void importIPSPatch() {
             fs::openFileBrowser(fs::DialogMode::Open, {}, [](const auto &path) {
-                TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [path](auto &task) {
+                TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [path](auto &task) {
                     auto patchData = wolv::io::File(path, wolv::io::File::Mode::Read).readVector();
                     auto patch = Patches::fromIPSPatch(patchData);
                     if (!patch.has_value()) {
@@ -100,7 +105,7 @@ namespace hex::plugin::builtin {
 
         void importIPS32Patch() {
             fs::openFileBrowser(fs::DialogMode::Open, {}, [](const auto &path) {
-                TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [path](auto &task) {
+                TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [path](auto &task) {
                     auto patchData = wolv::io::File(path, wolv::io::File::Mode::Read).readVector();
                     auto patch = Patches::fromIPS32Patch(patchData);
                     if (!patch.has_value()) {
@@ -124,7 +129,7 @@ namespace hex::plugin::builtin {
 
         void importModifiedFile() {
             fs::openFileBrowser(fs::DialogMode::Open, {}, [](const auto &path) {
-                TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [path](auto &task) {
+                TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [path](auto &task) {
                     auto provider = ImHexApi::Provider::get();
                     auto patchData = wolv::io::File(path, wolv::io::File::Mode::Read).readVector();
 
@@ -163,7 +168,7 @@ namespace hex::plugin::builtin {
 
         void exportBase64() {
             fs::openFileBrowser(fs::DialogMode::Save, {}, [](const auto &path) {
-                TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [path](auto &) {
+                TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [path](auto &) {
                     wolv::io::File outputFile(path, wolv::io::File::Mode::Create);
                     if (!outputFile.isValid()) {
                         TaskManager::doLater([] {
@@ -186,7 +191,7 @@ namespace hex::plugin::builtin {
 
         void exportSelectionToFile() {
             fs::openFileBrowser(fs::DialogMode::Save, {}, [](const auto &path) {
-                TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [path](auto &task) {
+                TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [path](auto &task) {
                     wolv::io::File outputFile(path, wolv::io::File::Mode::Create);
                     if (!outputFile.isValid()) {
                         TaskManager::doLater([] {
@@ -212,9 +217,9 @@ namespace hex::plugin::builtin {
 
         void drawExportLanguageMenu() {
             for (const auto &formatter : ContentRegistry::DataFormatter::impl::getExportMenuEntries()) {
-                if (ImGui::MenuItem(Lang(formatter.unlocalizedName), nullptr, false, ImHexApi::Provider::get()->getActualSize() > 0)) {
+                if (menu::menuItem(Lang(formatter.unlocalizedName), Shortcut::None, false, ImHexApi::Provider::isValid() && ImHexApi::Provider::get()->getActualSize() > 0)) {
                     fs::openFileBrowser(fs::DialogMode::Save, {}, [&formatter](const auto &path) {
-                        TaskManager::createTask("hex.builtin.task.exporting_data"_lang, TaskManager::NoProgress, [&formatter, path](auto&){
+                        TaskManager::createTask("hex.builtin.task.exporting_data", TaskManager::NoProgress, [&formatter, path](auto&){
                             auto provider = ImHexApi::Provider::get();
                             auto selection = ImHexApi::HexEditor::getSelection()
                                     .value_or(
@@ -223,7 +228,7 @@ namespace hex::plugin::builtin {
                                                 provider
                                             });
 
-                            auto result = formatter.callback(provider, selection.getStartAddress(), selection.getSize());
+                            auto result = formatter.callback(provider, selection.getStartAddress(), selection.getSize(), false);
 
                             wolv::io::File file(path, wolv::io::File::Mode::Create);
                             if (!file.isValid()) {
@@ -241,7 +246,7 @@ namespace hex::plugin::builtin {
         }
 
         void exportReport() {
-            TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [](auto &) {
+            TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [](auto &) {
                 std::string data;
 
                 for (const auto &provider : ImHexApi::Provider::getProviders()) {
@@ -285,7 +290,7 @@ namespace hex::plugin::builtin {
                 patches->get().at(0x00454F45) = value;
             }
 
-            TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [patches](auto &) {
+            TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [patches](auto &) {
                 auto data = patches->toIPSPatch();
 
                 TaskManager::doLater([data] {
@@ -297,12 +302,12 @@ namespace hex::plugin::builtin {
                         }
 
                         if (data.has_value()) {
-                            file.writeVector(data.value());
+                            const auto& bytes = data.value();
+                            file.writeVector(bytes);
+                            EventPatchCreated::post(bytes.data(), bytes.size(), PatchKind::IPS);
                         } else {
                             handleIPSError(data.error());
                         }
-
-                        AchievementManager::unlockAchievement("hex.builtin.achievement.hex_editor", "hex.builtin.achievement.hex_editor.create_patch.name");
                     });
                 });
             });
@@ -324,7 +329,7 @@ namespace hex::plugin::builtin {
                 patches->get().at(0x45454F45) = value;
             }
 
-            TaskManager::createTask("hex.ui.common.processing"_lang, TaskManager::NoProgress, [patches](auto &) {
+            TaskManager::createTask("hex.ui.common.processing", TaskManager::NoProgress, [patches](auto &) {
                 auto data = patches->toIPS32Patch();
 
                 TaskManager::doLater([data] {
@@ -336,12 +341,12 @@ namespace hex::plugin::builtin {
                         }
 
                         if (data.has_value()) {
-                            file.writeVector(data.value());
+                            const std::vector<u8>& bytes = data.value();
+                            file.writeVector(bytes);
+                            EventPatchCreated::post(bytes.data(), bytes.size(), PatchKind::IPS32);
                         } else {
                             handleIPSError(data.error());
                         }
-
-                        AchievementManager::unlockAchievement("hex.builtin.achievement.hex_editor", "hex.builtin.achievement.hex_editor.create_patch.name");
                     });
                 });
             });
@@ -379,7 +384,7 @@ namespace hex::plugin::builtin {
         /* Open Other */
         ContentRegistry::Interface::addMenuItemSubMenu({ "hex.builtin.menu.file", "hex.builtin.menu.file.open_other"}, ICON_VS_TELESCOPE, 1150, [] {
             for (const auto &unlocalizedProviderName : ContentRegistry::Provider::impl::getEntries()) {
-                if (ImGui::MenuItem(Lang(unlocalizedProviderName)))
+                if (menu::menuItem(Lang(unlocalizedProviderName)))
                     ImHexApi::Provider::createProvider(unlocalizedProviderName);
             }
         }, noRunningTasks);
@@ -541,6 +546,7 @@ namespace hex::plugin::builtin {
                     glfwSetWindowMonitor(window, monitor, 0, 0, videoMode->width, videoMode->height, videoMode->refreshRate);
                 } else {
                     glfwSetWindowMonitor(window, nullptr, position.x, position.y, size.x, size.y, 0);
+                    glfwSetWindowAttrib(window, GLFW_DECORATED, ImHexApi::System::isBorderlessWindowModeEnabled() ? GLFW_FALSE : GLFW_TRUE);
                 }
 
             }, []{ return true; }, []{ return glfwGetWindowMonitor(ImHexApi::System::getMainWindowHandle()) != nullptr; });
@@ -555,7 +561,7 @@ namespace hex::plugin::builtin {
                 if (view->hasViewMenuItemEntry()) {
                     auto &state = view->getWindowOpenState();
 
-                    if (ImGui::MenuItemEx(Lang(view->getUnlocalizedName()), view->getIcon(), "", state, ImHexApi::Provider::isValid() && !LayoutManager::isLayoutLocked()))
+                    if (menu::menuItemEx(Lang(view->getUnlocalizedName()), view->getIcon(), Shortcut::None, state, ImHexApi::Provider::isValid() && !LayoutManager::isLayoutLocked()))
                         state = !state;
                 }
             }
@@ -576,7 +582,7 @@ namespace hex::plugin::builtin {
 
         ContentRegistry::Interface::addMenuItemSubMenu({ "hex.builtin.menu.workspace", "hex.builtin.menu.workspace.layout" }, ICON_VS_LAYOUT, 1150, [] {
             bool locked = LayoutManager::isLayoutLocked();
-            if (ImGui::MenuItemEx("hex.builtin.menu.workspace.layout.lock"_lang, ICON_VS_LOCK, nullptr, locked, ImHexApi::Provider::isValid())) {
+            if (menu::menuItemEx("hex.builtin.menu.workspace.layout.lock"_lang, ICON_VS_LOCK, Shortcut::None, locked, ImHexApi::Provider::isValid())) {
                 LayoutManager::lockLayout(!locked);
                 ContentRegistry::Settings::write<bool>("hex.builtin.setting.interface", "hex.builtin.setting.interface.layout_locked", !locked);
             }
@@ -586,14 +592,14 @@ namespace hex::plugin::builtin {
 
         ContentRegistry::Interface::addMenuItemSubMenu({ "hex.builtin.menu.workspace", "hex.builtin.menu.workspace.layout" }, 2000, [] {
             for (const auto &path : romfs::list("layouts")) {
-                if (ImGui::MenuItem(wolv::util::capitalizeString(path.stem().string()).c_str(), "", false, ImHexApi::Provider::isValid())) {
+                if (menu::menuItem(wolv::util::capitalizeString(path.stem().string()).c_str(), Shortcut::None, false, ImHexApi::Provider::isValid())) {
                     LayoutManager::loadFromString(std::string(romfs::get(path).string()));
                 }
             }
 
             bool shiftPressed = ImGui::GetIO().KeyShift;
             for (auto &[name, path] : LayoutManager::getLayouts()) {
-                if (ImGui::MenuItem(hex::format("{}{}", name, shiftPressed ? " " ICON_VS_X : "").c_str(), "", false, ImHexApi::Provider::isValid())) {
+                if (menu::menuItem(hex::format("{}{}", name, shiftPressed ? " " ICON_VS_X : "").c_str(), Shortcut::None, false, ImHexApi::Provider::isValid())) {
                     if (shiftPressed) {
                         LayoutManager::removeLayout(name);
                         break;
@@ -626,7 +632,7 @@ namespace hex::plugin::builtin {
                 const auto &[name, workspace] = *it;
 
                 bool canRemove = shiftPressed && !workspace.builtin;
-                if (ImGui::MenuItem(hex::format("{}{}", name, canRemove ? " " ICON_VS_X : "").c_str(), "", it == WorkspaceManager::getCurrentWorkspace(), ImHexApi::Provider::isValid())) {
+                if (menu::menuItem(hex::format("{}{}", name, canRemove ? " " ICON_VS_X : "").c_str(), Shortcut::None, it == WorkspaceManager::getCurrentWorkspace(), ImHexApi::Provider::isValid())) {
                     if (canRemove) {
                         WorkspaceManager::removeWorkspace(name);
                         break;

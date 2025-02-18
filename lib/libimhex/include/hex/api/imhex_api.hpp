@@ -2,6 +2,8 @@
 
 #include <hex.hpp>
 #include <hex/api/localization_manager.hpp>
+#include <hex/helpers/semantic_version.hpp>
+#include <hex/helpers/fs.hpp>
 
 #include <functional>
 #include <optional>
@@ -10,24 +12,27 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <memory>
 
-#include <wolv/io/fs.hpp>
-
-using ImGuiID = unsigned int;
-struct ImVec2;
-struct ImFontAtlas;
-struct ImFont;
+#if !defined(HEX_MODULE_EXPORT)
+    using ImGuiID = unsigned int;
+    struct ImVec2;
+    struct ImFontAtlas;
+    struct ImFont;
+#endif
 struct GLFWwindow;
 
-namespace hex {
+EXPORT_MODULE namespace hex {
 
-    namespace impl {
-        class AutoResetBase;
-    }
+    #if !defined(HEX_MODULE_EXPORT)
+        namespace impl {
+            class AutoResetBase;
+        }
 
-    namespace prv {
-        class Provider;
-    }
+        namespace prv {
+            class Provider;
+        }
+    #endif
 
     namespace ImHexApi {
 
@@ -443,6 +448,8 @@ namespace hex {
                 bool isWindowResizable();
 
                 void addAutoResetObject(hex::impl::AutoResetBase *object);
+                void removeAutoResetObject(hex::impl::AutoResetBase *object);
+
                 void cleanup();
 
             }
@@ -492,6 +499,7 @@ namespace hex {
              */
             float getNativeScale();
 
+            float getBackingScaleFactor();
 
             /**
              * @brief Gets the current main window position
@@ -581,6 +589,14 @@ namespace hex {
             const std::string& getGLRenderer();
 
             /**
+             * @brief Checks if ImHex is being run in a "Corporate Environment"
+             * This function simply checks for common telltale signs such as if the machine is joined a
+             * domain. It's not super accurate, but it's still useful for statistics
+             * @return True if it is
+             */
+            bool isCorporateEnvironment();
+
+            /**
              * @brief Checks if ImHex is running in portable mode
              * @return Whether ImHex is running in portable mode
              */
@@ -618,7 +634,7 @@ namespace hex {
              * @brief Gets the current ImHex version
              * @return ImHex version
              */
-            std::string getImHexVersion(bool withBuildType = true);
+            SemanticVersion getImHexVersion();
 
             /**
              * @brief Gets the current git commit hash
@@ -695,6 +711,13 @@ namespace hex {
              */
             void* getLibImHexModuleHandle();
 
+            /**
+             * Adds a new migration routine that will be executed when upgrading from a lower version than specified in migrationVersion
+             * @param migrationVersion Upgrade point version
+             * @param function Function to run
+             */
+            void addMigrationRoutine(SemanticVersion migrationVersion, std::function<void()> function);
+
         }
 
         /**
@@ -736,11 +759,8 @@ namespace hex {
 
                 const std::vector<Font>& getFonts();
 
-                void setCustomFontPath(const std::fs::path &path);
-                void setFontSize(float size);
-                void setFontAtlas(ImFontAtlas *fontAtlas);
+                std::map<UnlocalizedString, ImFont*>& getFontDefinitions();
 
-                void setFonts(ImFont *bold, ImFont *italic);
             }
 
             GlyphRange glyph(const char *glyph);
@@ -751,28 +771,10 @@ namespace hex {
             void loadFont(const std::fs::path &path, const std::vector<GlyphRange> &glyphRanges = {}, Offset offset = {}, u32 flags = 0, std::optional<u32> defaultSize = std::nullopt);
             void loadFont(const std::string &name, const std::span<const u8> &data, const std::vector<GlyphRange> &glyphRanges = {}, Offset offset = {}, u32 flags = 0, std::optional<u32> defaultSize = std::nullopt);
 
-            constexpr static float DefaultFontSize = 13.0;
+            constexpr float DefaultFontSize = 13.0;
 
-            ImFont* Bold();
-            ImFont* Italic();
-
-            /**
-             * @brief Gets the current custom font path
-             * @return The current custom font path
-             */
-            const std::filesystem::path& getCustomFontPath();
-
-            /**
-             * @brief Gets the current font size
-             * @return The current font size
-             */
-            float getFontSize();
-
-            /**
-             * @brief Gets the current font atlas
-             * @return Current font atlas
-             */
-            ImFontAtlas* getFontAtlas();
+            void registerFont(const UnlocalizedString &fontName);
+            ImFont* getFont(const UnlocalizedString &fontName);
 
         }
 

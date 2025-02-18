@@ -9,7 +9,7 @@
 #include <nlohmann/json_fwd.hpp>
 #include <imgui.h>
 
-namespace hex {
+EXPORT_MODULE namespace hex {
 
     /**
      * @brief The Theme Manager takes care of loading and applying themes
@@ -67,6 +67,7 @@ namespace hex {
 
         static void reset();
 
+        static void setAccentColor(const ImColor &color);
 
     public:
         struct ThemeHandler {
@@ -81,6 +82,7 @@ namespace hex {
 
         static const std::map<std::string, ThemeHandler>& getThemeHandlers();
         static const std::map<std::string, StyleHandler>& getStyleHandlers();
+
 
     private:
         ThemeManager() = default;

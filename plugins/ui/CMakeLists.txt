@@ -10,10 +10,11 @@ add_imhex_plugin(
 
         source/ui/hex_editor.cpp
         source/ui/pattern_drawer.cpp
+        source/ui/visualizer_drawer.cpp
+        source/ui/menu_items.cpp
     INCLUDES
         include
     LIBRARIES
-        libpl-gen
         fonts
     LIBRARY_PLUGIN
 )

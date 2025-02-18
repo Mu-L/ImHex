@@ -44,7 +44,7 @@ namespace hex::paths {
 
             if (includeSystemFolders) {
                 if (auto executablePath = wolv::io::fs::getExecutablePath(); executablePath.has_value()) {
-                    paths.push_back(*executablePath);
+                    paths.push_back(executablePath->parent_path());
                 }
             }
 
@@ -79,7 +79,7 @@ namespace hex::paths {
         #elif defined(OS_MACOS)
             return getDataPaths(includeSystemFolders);
         #elif defined(OS_LINUX) || defined(OS_WEB)
-            hex::unused(includeSystemFolders);
+            std::ignore = includeSystemFolders;
             return {xdg::ConfigHomeDir() / "imhex"};
         #endif
     }

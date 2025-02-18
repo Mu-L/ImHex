@@ -2,9 +2,10 @@
 
 #include <hex/api/content_registry.hpp>
 #include <hex/api/theme_manager.hpp>
+#include <hex/api/events/events_interaction.hpp>
 
 #include <wolv/io/file.hpp>
-#include <fonts/codicons_font.h>
+#include <fonts/vscode_icons.hpp>
 
 namespace hex::plugin::builtin {
 
